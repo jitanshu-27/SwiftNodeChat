@@ -1,0 +1,14 @@
+{
+  "name": "swiftnodechat",
+  "description": "A real-time chat application built with Socket.IO, Next.js and MongoDB",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.1",
+    "typescript": "^5.5.4"
+  },
+  "workspaces": ["apps/*"]
+}

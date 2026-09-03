@@ -16,6 +16,7 @@ interface User {
 interface RoomData {
   id: string;
   users: Map<string, User>;
+  typingUsers: Set<string>;  
   lastActive: number;
   createdAt: Date;
 }
@@ -137,6 +138,7 @@ io.on("connection", (socket) => {
     room = {
       id: roomCode,
       users: new Map<string, User>(),
+      typingUsers: new Set<string>(), 
       lastActive: Date.now(),
       createdAt: new Date(),
     };
@@ -177,6 +179,12 @@ socket.on("send-message", async ({ roomCode, message, userId, name }) => {
   if (!room) return;
 
   room.lastActive = Date.now();
+  room.typingUsers.delete(socket.id);
+  io.to(roomCode).emit("typing-update", {
+    typingUsers: Array.from(room.typingUsers).map(
+      (id) => room.users.get(id)?.name || "Someone"
+    ),
+  });
 
   const messageData = {
     id: Math.random().toString(36).slice(2, 10),
@@ -191,10 +199,35 @@ socket.on("send-message", async ({ roomCode, message, userId, name }) => {
   io.to(roomCode).emit("new-message", messageData);
 });
 
+socket.on("typing-start", ({ roomCode }) => {
+  const room = rooms.get(roomCode);
+  if (room && room.users.has(socket.id)) {
+    room.typingUsers.add(socket.id);
+    socket.to(roomCode).emit("typing-update", {
+      typingUsers: Array.from(room.typingUsers).map(
+        (id) => room.users.get(id)?.name || "Someone"
+      ),
+    });
+  }
+});
+
+socket.on("typing-stop", ({ roomCode }) => {
+  const room = rooms.get(roomCode);
+  if (room) {
+    room.typingUsers.delete(socket.id);
+    socket.to(roomCode).emit("typing-update", {
+      typingUsers: Array.from(room.typingUsers).map(
+        (id) => room.users.get(id)?.name || "Someone"
+      ),
+    });
+  }
+});
+
  socket.on("disconnect", () => {
     for (const [roomCode, room] of rooms) {
       if (room.users.has(socket.id)) {
         room.users.delete(socket.id);
+        room.typingUsers.delete(socket.id);
         io.to(roomCode).emit("user-left", {
           userCount: room.users.size,
           users: Array.from(room.users.values()).map((u) => ({

@@ -129,45 +129,67 @@ io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
    // Join a room
-  socket.on("join-room", ({ roomId, name, userId }) => {
-    const roomCode = roomId.toUpperCase();
+ socket.on("join-room", async ({ roomId, name, userId }) => {
+  const roomCode = roomId.toUpperCase();
 
-    let room = rooms.get(roomCode);
-    if (!room) {
-      room = {
-        id: roomCode,
-        users: new Map<string, User>(),
-        lastActive: Date.now(),
-        createdAt: new Date(),
-      };
-      rooms.set(roomCode, room);
-    }
-
-    const user: User = {
-      id: userId || socket.id,
-      socketId: socket.id,
-      name: name || "Anonymous",
-      status: "online",
-      joinedAt: new Date(),
+  let room = rooms.get(roomCode);
+  if (!room) {
+    room = {
+      id: roomCode,
+      users: new Map<string, User>(),
+      lastActive: Date.now(),
+      createdAt: new Date(),
     };
+    rooms.set(roomCode, room);
+    await getOrCreateRoom(roomCode);           
+  }
 
-    socket.join(roomCode);
-    room.users.set(socket.id, user);
-    room.lastActive = Date.now();
+  const messages = await getMessagesFromDb(roomCode);   
 
-    socket.emit("joined-room", { roomCode });
+  const user: User = {
+    id: userId || socket.id,
+    socketId: socket.id,
+    name: name || "Anonymous",
+    status: "online",
+    joinedAt: new Date(),
+  };
 
-    io.to(roomCode).emit("user-joined", {
-      userCount: room.users.size,
-      users: Array.from(room.users.values()).map((u) => ({
-        id: u.id,
-        name: u.name,
-        status: u.status,
-      })),
+  socket.join(roomCode);
+  room.users.set(socket.id, user);
+  room.lastActive = Date.now();
+
+  socket.emit("joined-room", { roomCode, messages });   
+
+  io.to(roomCode).emit("user-joined", {
+    userCount: room.users.size,
+    users: Array.from(room.users.values()).map((u) => ({
+      id: u.id,
+      name: u.name,
+      status: u.status,
+    })),
+  });
+
+  console.log(`${user.name} joined room ${roomCode}`);
 });
 
-    console.log(`${user.name} joined room ${roomCode}`);
-  });
+socket.on("send-message", async ({ roomCode, message, userId, name }) => {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+
+  room.lastActive = Date.now();
+
+  const messageData = {
+    id: Math.random().toString(36).slice(2, 10),
+    content: message,
+    senderId: userId,
+    sender: name,
+    timestamp: new Date(),
+    type: "text" as const,
+  };
+
+  await saveMessageToDb(roomCode, messageData);
+  io.to(roomCode).emit("new-message", messageData);
+});
 
  socket.on("disconnect", () => {
     for (const [roomCode, room] of rooms) {

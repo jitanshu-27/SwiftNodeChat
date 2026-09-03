@@ -8,6 +8,8 @@ import cors from "cors";
 import mongoose from "mongoose";
 
 const GRACE_PERIOD_MS = 5000;
+const ROOM_CLEANUP_INTERVAL_MS = 3600000;   
+const ROOM_INACTIVE_TIMEOUT_MS = 3600000;
 
 interface User {
   id: string;
@@ -321,6 +323,16 @@ socket.on("typing-stop", ({ roomCode }) => {
   console.log("User disconnected:", socket.id);
 });
 });
+
+setInterval(() => {
+  const now = Date.now();
+  rooms.forEach((room, roomCode) => {
+    if (room.users.size === 0 && now - room.lastActive > ROOM_INACTIVE_TIMEOUT_MS) {
+      console.log(`Cleaning up inactive room: ${roomCode}`);
+      rooms.delete(roomCode);
+    }
+  });
+}, ROOM_CLEANUP_INTERVAL_MS);
 
 
 

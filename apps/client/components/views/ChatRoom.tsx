@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import FileUpload from "@/components/chat/FileUpload";
@@ -12,6 +13,7 @@ interface Message {
   sender: string;
   timestamp: Date;
   type: "text" | "file" | "image" | "system";
+  file?: { url: string; name: string; size: number; mimeType: string };
 }
 
 interface RoomUser {
@@ -27,7 +29,7 @@ interface ChatRoomProps {
   messages: Message[];
   users: RoomUser[];
   typingUsers: string[];
-  onSendMessage: (content: string) => void;
+  onSendMessage: (content: string, file?: { url: string; name: string; size: number; mimeType: string }) => void; 
   onTypingStart: () => void;         
   onTypingStop: () => void;  
   onLeave: () => void;
@@ -117,34 +119,54 @@ export default function ChatRoom({
                 className={`flex ${msg.senderId === currentUserId ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-xs rounded-lg px-3 py-2 text-sm ${
+                    className={`max-w-xs rounded-lg px-3 py-2 text-sm ${
                     msg.senderId === currentUserId
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted"
-                  }`}
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted"
+                }`}
                 >
                   {msg.senderId !== currentUserId && (
-                    <p className="mb-0.5 text-xs font-medium opacity-70">{msg.sender}</p>
+                  <p className="mb-0.5 text-xs font-medium opacity-70">{msg.sender}</p>
                   )}
-                  <p>{msg.content}</p>
+                  
+                  {msg.type === "image" && msg.file ? (
+                  
+                  <img
+                    src={msg.file.url}
+                    alt={msg.file.name}
+                    className="h-auto max-w-full rounded-md"
+                  />
+                  ) : msg.type === "file" && msg.file ? (
+                    <a
+                      href={msg.file.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline"
+                                      >
+                        📎 {msg.file.name}
+                      </a>
+                    ) : (
+                      <p>{msg.content}</p>
+                    )}
+
                 </div>
               </div>
             )
           )}
           <div ref={bottomRef} />
-          {typingUsers.length > 0 && (
-  <p className="px-4 pb-1 text-xs text-muted-foreground">
-    {typingUsers.join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing...
-  </p>
+                {typingUsers.length > 0 && (
+                 <p className="px-4 pb-1 text-xs text-muted-foreground">
+                     {typingUsers.join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing...
+                </p>
 )}
         </div>
 
         {/* Input */}
         <div className="flex gap-2 border-t p-3">
   <FileUpload
-    onUploaded={(file) => {
-      console.log("Uploaded:", file);
-    }}
+     onUploaded={(file) => {
+    onSendMessage(file.name, file);   
+  }}
   />
   <Input
     placeholder="Type a message..."

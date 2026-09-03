@@ -237,7 +237,7 @@ io.on("connection", (socket) => {
   console.log(`${user.name} ${isReconnecting ? "reconnected to" : "joined"} room ${roomCode}`);
 });
 
-socket.on("send-message", async ({ roomCode, message, userId, name }) => {
+socket.on("send-message", async ({ roomCode, message, userId, name , file}) => {
   const room = rooms.get(roomCode);
   if (!room) return;
 
@@ -255,7 +255,7 @@ socket.on("send-message", async ({ roomCode, message, userId, name }) => {
     senderId: userId,
     sender: name,
     timestamp: new Date(),
-    type: "text" as const,
+    type: file  ? (file.mimeType?.startsWith("image/") ? ("image" as const) : ("file" as const))  : ("text" as const), file,
   };
 
   await saveMessageToDb(roomCode, messageData);

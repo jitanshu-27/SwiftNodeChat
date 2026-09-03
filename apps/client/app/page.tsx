@@ -4,14 +4,6 @@ import LobbyView from "@/components/views/LobbyView";
 import ChatRoom from "@/components/views/ChatRoom";
 import { useSocket } from "@/hooks/useSocket";
 
-interface Message {
-  id: string;
-  content: string;
-  senderId: string;
-  sender: string;
-  timestamp: Date;
-  type: "text" | "file" | "image" | "system";
-}
 
 export default function Home() {
   const [roomCode, setRoomCode] = useState<string | null>(null);
@@ -27,14 +19,16 @@ export default function Home() {
     joinRoom(code, name, userId);
 }
 
-const handleSendMessage = (content: string) => {
-    if (!roomCode) return;
-    sendMessage(roomCode, content, userId, userName);
-  };
-if (!roomCode) {
+const handleSendMessage = (
+  content: string,
+  file?: { url: string; name: string; size: number; mimeType: string }
+) => {
+  if (!roomCode) return;
+  sendMessage(roomCode, content, userId, userName, file);
+};
+  if (!roomCode) {
     return <LobbyView onJoin={handleJoin} />;
   }
-
   return (
     <ChatRoom
       roomCode={roomCode}

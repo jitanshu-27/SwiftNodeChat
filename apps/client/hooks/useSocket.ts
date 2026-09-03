@@ -10,6 +10,7 @@ interface Message {
   sender: string;
   timestamp: Date;
   type: "text" | "file" | "image" | "system";
+  file?: { url: string; name: string; size: number; mimeType: string }; 
 }
 
 interface RoomUser {
@@ -66,9 +67,10 @@ export function useSocket() {
     socketRef.current.emit("join-room", { roomId, name, userId });
   }, []);
 
-  const sendMessage = useCallback((roomCode: string, message: string, userId: string, name: string) => {
-    socketRef.current.emit("send-message", { roomCode, message, userId, name });
-  }, []);
+  const sendMessage = useCallback(( roomCode: string, message: string, userId: string, name: string, file?: { url: string; name: string; size: number; mimeType: string }) => {
+    socketRef.current.emit("send-message", { roomCode, message, userId, name, file });
+  },[]
+  )
 
   const startTyping = useCallback((roomCode: string) => {
     socketRef.current.emit("typing-start", { roomCode });

@@ -19,7 +19,7 @@ export default function Home() {
   const [userId] = useState(() => Math.random().toString(36).slice(2, 10));
   
 
-   const { messages, users, joinRoom, sendMessage } = useSocket();
+  const { messages, users, typingUsers, joinRoom, sendMessage, startTyping, stopTyping } = useSocket();
 
   const handleJoin = (code: string, name: string) => {
     setRoomCode(code);
@@ -42,7 +42,10 @@ if (!roomCode) {
       currentUserName={userName}
       messages={messages}
       users={users}
+      typingUsers={typingUsers.filter((n) => n !== userName)}
       onSendMessage={handleSendMessage}
+      onTypingStart={() => startTyping(roomCode)}
+      onTypingStop={() => stopTyping(roomCode)}
       onLeave={() => setRoomCode(null)}
     />
   );

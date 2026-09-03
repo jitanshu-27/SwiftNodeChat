@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import FileUpload from "@/components/chat/FileUpload";
 
 interface Message {
   id: string;
@@ -25,7 +26,10 @@ interface ChatRoomProps {
   currentUserName: string;
   messages: Message[];
   users: RoomUser[];
+  typingUsers: string[];
   onSendMessage: (content: string) => void;
+  onTypingStart: () => void;         
+  onTypingStop: () => void;  
   onLeave: () => void;
 }
 
@@ -34,20 +38,36 @@ export default function ChatRoom({
   currentUserId,
   messages,
   users,
+  typingUsers,
   onSendMessage,
+  onTypingStart,        
+  onTypingStop, 
   onLeave,
 }: ChatRoomProps) {
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null); 
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const handleInputChange = (value: string) => {
+  setInput(value);
+  onTypingStart();
+
+  if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+  typingTimeoutRef.current = setTimeout(() => {
+    onTypingStop();
+  }, 1500);
+};
+
   const handleSend = () => {
     if (!input.trim()) return;
     onSendMessage(input.trim());
     setInput("");
+    onTypingStop(); 
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current); 
   };
 
   return (
@@ -112,18 +132,28 @@ export default function ChatRoom({
             )
           )}
           <div ref={bottomRef} />
+          {typingUsers.length > 0 && (
+  <p className="px-4 pb-1 text-xs text-muted-foreground">
+    {typingUsers.join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing...
+  </p>
+)}
         </div>
 
         {/* Input */}
         <div className="flex gap-2 border-t p-3">
-          <Input
-            placeholder="Type a message..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          />
-          <Button onClick={handleSend}>Send</Button>
-        </div>
+  <FileUpload
+    onUploaded={(file) => {
+      console.log("Uploaded:", file);
+    }}
+  />
+  <Input
+    placeholder="Type a message..."
+    value={input}
+    onChange={(e) => handleInputChange(e.target.value)}
+    onKeyDown={(e) => e.key === "Enter" && handleSend()}
+  />
+  <Button onClick={handleSend}>Send</Button>
+</div>
       </div>
     </div>
   );

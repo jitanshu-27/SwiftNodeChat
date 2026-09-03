@@ -44,6 +44,60 @@ roomSchema.index({ lastActive: 1 }, { expireAfterSeconds: 7 * 24 * 60 * 60 });
 const Message = mongoose.model("Message", messageSchema);
 const Room = mongoose.model("Room", roomSchema);
 
+async function saveMessageToDb(roomCode: string, message: {
+  id: string;
+  content: string;
+  senderId: string;
+  sender: string;
+  timestamp: Date;
+  type: "text" | "file" | "image" | "system";
+  file?: { url: string; name: string; size: number; mimeType: string };
+}) {
+  if (mongoose.connection.readyState !== 1) return; // DB connected nahi hai to skip
+  try {
+    await Message.create({ ...message, roomCode });
+  } catch (error) {
+    console.error("Error saving message:", error);
+  }
+}
+
+async function getMessagesFromDb(roomCode: string) {
+  if (mongoose.connection.readyState !== 1) return [];
+  try {
+    const messages = await Message.find({ roomCode })
+      .sort({ timestamp: 1 })
+      .limit(100)
+      .lean();
+    return messages.map((m: any) => ({
+      id: m.id,
+      content: m.content || "",
+      senderId: m.senderId,
+      sender: m.sender,
+      timestamp: m.timestamp,
+      type: m.type,
+      file: m.file?.url
+        ? { url: m.file.url, name: m.file.name || "", size: m.file.size || 0, mimeType: m.file.mimeType || "" }
+        : undefined,
+    }));
+  } catch (error) {
+    console.error("Error loading messages:", error);
+    return [];
+  }
+}
+
+async function getOrCreateRoom(roomCode: string) {
+  if (mongoose.connection.readyState !== 1) return;
+  try {
+    await Room.findOneAndUpdate(
+      { code: roomCode },
+      { code: roomCode, lastActive: new Date() },
+      { upsert: true }
+    );
+  } catch (error) {
+    console.error("Error saving room:", error);
+  }
+}
+
 const app = express();
 const httpServer = createServer(app);
 

@@ -7,6 +7,8 @@ import { Server } from "socket.io";
 import cors from "cors";
 import mongoose from "mongoose";
 
+const GRACE_PERIOD_MS = 5000;
+
 interface User {
   id: string;
   socketId: string;
@@ -195,6 +197,14 @@ io.on("connection", (socket) => {
     rooms.set(roomCode, room);
     await getOrCreateRoom(roomCode);           
   }
+    let oldSocketId: string | undefined;
+  for (const [socketId, u] of room.users) {
+    if (u.id === (userId || socket.id)) {
+      oldSocketId = socketId;
+      break;
+    }
+  }
+  const isReconnecting = !!oldSocketId;
 
   const messages = await getMessagesFromDb(roomCode);   
 
@@ -207,6 +217,7 @@ io.on("connection", (socket) => {
   };
 
   socket.join(roomCode);
+  if (oldSocketId) room.users.delete(oldSocketId); 
   room.users.set(socket.id, user);
   room.lastActive = Date.now();
 
@@ -221,7 +232,7 @@ io.on("connection", (socket) => {
     })),
   });
 
-  console.log(`${user.name} joined room ${roomCode}`);
+  console.log(`${user.name} ${isReconnecting ? "reconnected to" : "joined"} room ${roomCode}`);
 });
 
 socket.on("send-message", async ({ roomCode, message, userId, name }) => {
@@ -274,22 +285,41 @@ socket.on("typing-stop", ({ roomCode }) => {
 });
 
  socket.on("disconnect", () => {
-    for (const [roomCode, room] of rooms) {
-      if (room.users.has(socket.id)) {
-        room.users.delete(socket.id);
-        room.typingUsers.delete(socket.id);
-        io.to(roomCode).emit("user-left", {
-          userCount: room.users.size,
-          users: Array.from(room.users.values()).map((u) => ({
-            id: u.id,
-            name: u.name,
-            status: u.status,
-          })),
-        });
+  for (const [roomCode, room] of rooms) {
+    if (room.users.has(socket.id)) {
+      const user = room.users.get(socket.id);
+      const userId = user?.id;
+
+      room.users.delete(socket.id);
+      room.typingUsers.delete(socket.id);
+
+      io.to(roomCode).emit("user-left", {
+        userCount: room.users.size,
+        users: Array.from(room.users.values()).map((u) => ({
+          id: u.id,
+          name: u.name,
+          status: u.status,
+        })),
+      });
+
+      if (user) {
+        setTimeout(() => {
+          const currentRoom = rooms.get(roomCode);
+          if (currentRoom) {
+            const hasReconnected = Array.from(currentRoom.users.values()).some(
+              (u) => u.id === userId
+            );
+            if (!hasReconnected) {
+              console.log(`${user.name} left room ${roomCode} (grace period expired)`);
+              // yahan chaho to "X left the room" system message bhi add kar sakte ho (Step 4B ke saveMessageToDb se)
+            }
+          }
+        }, GRACE_PERIOD_MS);
       }
     }
-    console.log("User disconnected:", socket.id);
-  });
+  }
+  console.log("User disconnected:", socket.id);
+});
 });
 
 

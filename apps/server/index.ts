@@ -1,4 +1,6 @@
 import "dotenv/config";
+import multer from "multer";
+import { v2 as cloudinary } from "cloudinary";
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
@@ -105,15 +107,6 @@ const httpServer = createServer(app);
 app.use(cors());
 app.use(express.json());
 
-// Health check endpoint
-app.get("/health", (req, res) => {
-  res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
-const io = new Server(httpServer, {
-  cors: { origin: "*" },
-});
-
 const MONGODB_URI = process.env.MONGODB_URI;
 if (!MONGODB_URI) {
   console.warn("Warning: MONGODB_URI not set. Messages won't persist.");
@@ -123,6 +116,63 @@ if (!MONGODB_URI) {
     .then(() => console.log("Connected to MongoDB"))
     .catch((err) => console.error("MongoDB connection error:", err));
 }
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      "image/jpeg", "image/png", "image/gif", "image/webp",
+      "application/pdf", "text/plain",
+    ];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error("File type not allowed"));
+  },
+});
+
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+app.post("/upload", upload.single("file"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+  try {
+    const isImage = req.file.mimetype.startsWith("image/");
+    const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: isImage ? "image" : "raw",
+          folder: "swiftnodechat",
+        },
+        (err, result) => (err ? reject(err) : resolve(result as { secure_url: string }))
+      );
+      stream.end(req.file!.buffer);
+    });
+
+    res.json({
+      url: result.secure_url,
+      name: req.file.originalname,
+      size: req.file.size,
+      mimeType: req.file.mimetype,
+    });
+  } catch (error) {
+    console.error("Cloudinary upload error:", error);
+    res.status(500).json({ error: "Failed to upload file" });
+  }
+});
+
+const io = new Server(httpServer, {
+  cors: { origin: "*" },
+});
+
 
 const rooms = new Map<string, RoomData>();
 

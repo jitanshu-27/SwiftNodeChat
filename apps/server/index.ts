@@ -1,7 +1,9 @@
+import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import cors from "cors";
+import mongoose from "mongoose";
 
 interface User {
   id: string;
@@ -18,6 +20,30 @@ interface RoomData {
   createdAt: Date;
 }
 
+const messageSchema = new mongoose.Schema({
+  id: { type: String, required: true },
+  roomCode: { type: String, required: true, index: true },
+  content: { type: String, default: "" },
+  senderId: { type: String, required: true },
+  sender: { type: String, required: true },
+  timestamp: { type: Date, default: Date.now },
+  type: { type: String, enum: ["text", "file", "image", "system"], default: "text" },
+  file: { url: String, name: String, size: Number, mimeType: String },
+});
+messageSchema.index({ timestamp: 1 }, { expireAfterSeconds: 7 * 24 * 60 * 60 });
+
+const roomSchema = new mongoose.Schema({
+  code: { type: String, required: true, unique: true, index: true },
+  name: { type: String },
+  createdAt: { type: Date, default: Date.now },
+  lastActive: { type: Date, default: Date.now },
+});
+
+roomSchema.index({ lastActive: 1 }, { expireAfterSeconds: 7 * 24 * 60 * 60 });
+
+const Message = mongoose.model("Message", messageSchema);
+const Room = mongoose.model("Room", roomSchema);
+
 const app = express();
 const httpServer = createServer(app);
 
@@ -32,6 +58,16 @@ app.get("/health", (req, res) => {
 const io = new Server(httpServer, {
   cors: { origin: "*" },
 });
+
+const MONGODB_URI = process.env.MONGODB_URI;
+if (!MONGODB_URI) {
+  console.warn("Warning: MONGODB_URI not set. Messages won't persist.");
+} else {
+  mongoose
+    .connect(MONGODB_URI)
+    .then(() => console.log("Connected to MongoDB"))
+    .catch((err) => console.error("MongoDB connection error:", err));
+}
 
 const rooms = new Map<string, RoomData>();
 

@@ -3,87 +3,95 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Loader2, Copy } from "lucide-react";
 
 interface LobbyViewProps {
-  onJoin: (roomCode: string, name: string) => void;
+  onCreateRoom: (name: string) => void;
+  onJoinRoom: (roomCode: string, name: string) => void;
+  createdRoomCode?: string;
+  onEnterRoom?: () => void; 
+  isLoading?: boolean;
 }
 
-function generateRoomCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return code;
-}
-
-export default function LobbyView({ onJoin }: LobbyViewProps) {
+export default function LobbyView({
+  onCreateRoom,
+  onJoinRoom,
+  createdRoomCode,
+  onEnterRoom, 
+  isLoading,
+}: LobbyViewProps) {
   const [name, setName] = useState("");
-  const [roomCode, setRoomCode] = useState("");
-  const [mode, setMode] = useState<"create" | "join">("create");
+  const [inputCode, setInputCode] = useState("");
 
-  const handleSubmit = () => {
-    if (!name.trim()) return;
-
-    if (mode === "create") {
-      const newCode = generateRoomCode();
-      onJoin(newCode, name.trim());
-    } else {
-      if (!roomCode.trim()) return;
-      onJoin(roomCode.trim().toUpperCase(), name.trim());
-    }
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="text-center space-y-2">
-          <h1 className="text-2xl font-semibold">SwiftNodeChat</h1>
-          <p className="text-sm text-muted-foreground">
-            Real-time chat rooms, no sign-up needed.
-          </p>
-        </div>
+    <div className="space-y-4">
+      <Button
+        onClick={() => onCreateRoom(name)}
+        className="w-full text-lg py-6"
+        size="lg"
+        disabled={isLoading || !name.trim()}
+      >
+        {isLoading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Creating room...
+          </>
+        ) : (
+          "Create New Room"
+        )}
+      </Button>
 
-        <div className="flex gap-2 rounded-lg bg-muted p-1">
-          <button
-            onClick={() => setMode("create")}
-            className={`flex-1 rounded-md py-1.5 text-sm font-medium transition ${
-              mode === "create" ? "bg-background shadow" : "text-muted-foreground"
-            }`}
-          >
-            Create Room
-          </button>
-          <button
-            onClick={() => setMode("join")}
-            className={`flex-1 rounded-md py-1.5 text-sm font-medium transition ${
-              mode === "join" ? "bg-background shadow" : "text-muted-foreground"
-            }`}
-          >
+      <Input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Enter your name"
+        className="text-lg py-5"
+      />
+
+      <div className="flex gap-2">
+        <Input
+          value={inputCode}
+          onChange={(e) => setInputCode(e.target.value.toUpperCase())}
+          placeholder="Enter Room Code"
+          className="text-lg py-5"
+        />
+        <Button
+              type="button"
+              onClick={() => onJoinRoom(inputCode, name)}
+              size="lg"
+              className="px-8"
+              disabled={!name.trim() || !inputCode.trim()}
+            >
             Join Room
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          <Input
-            placeholder="Your name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-
-          {mode === "join" && (
-            <Input
-              placeholder="Room code"
-              value={roomCode}
-              onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-              maxLength={6}
-            />
-          )}
-
-          <Button onClick={handleSubmit} className="w-full">
-            {mode === "create" ? "Create Room" : "Join Room"}
-          </Button>
-        </div>
+        </Button>
       </div>
+
+      {createdRoomCode && (
+  <div className="text-center p-6 bg-muted rounded-lg space-y-3">
+    <p className="text-sm text-muted-foreground mb-2">
+      Share this code with your friend
+    </p>
+    <div className="flex items-center justify-center gap-2">
+      <span className="font-mono text-2xl font-bold">{createdRoomCode}</span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={() => copyToClipboard(createdRoomCode)}
+        className="h-8 w-8"
+      >
+        <Copy className="h-4 w-4" />
+      </Button>
+    </div>
+    <Button type="button" onClick={onEnterRoom} className="w-full">
+      Enter Room
+    </Button>
+  </div>
+)}
     </div>
   );
 }

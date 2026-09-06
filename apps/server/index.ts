@@ -7,6 +7,7 @@ import { Server } from "socket.io";
 import cors from "cors";
 import mongoose from "mongoose";
 
+
 const GRACE_PERIOD_MS = 5000;
 const ROOM_CLEANUP_INTERVAL_MS = 3600000;   
 const ROOM_INACTIVE_TIMEOUT_MS = 3600000;
@@ -112,14 +113,22 @@ app.use(cors());
 app.use(express.json());
 
 const MONGODB_URI = process.env.MONGODB_URI;
+
 if (!MONGODB_URI) {
-  console.warn("Warning: MONGODB_URI not set. Messages won't persist.");
-} else {
-  mongoose
-    .connect(MONGODB_URI)
-    .then(() => console.log("Connected to MongoDB"))
-    .catch((err) => console.error("MongoDB connection error:", err));
+  throw new Error("MONGODB_URI is not defined in .env");
 }
+
+async function connectMongoDB() {
+  try {
+    await mongoose.connect(MONGODB_URI!);
+
+    console.log("✅ Connected to MongoDB");
+  } catch (error) {
+    console.error("❌ MongoDB connection failed:", error);
+  }
+}
+
+connectMongoDB();
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -185,8 +194,11 @@ io.on("connection", (socket) => {
 
    // Join a room
  socket.on("join-room", async ({ roomId, name, userId }) => {
-  const roomCode = roomId.toUpperCase();
-
+ if (!roomId) {
+    socket.emit("error", { message: "Room ID is required" });
+    return;
+  }
+  const roomCode = roomId.toUpperCase().trim();
   let room = rooms.get(roomCode);
   if (!room) {
     room = {
@@ -237,8 +249,35 @@ io.on("connection", (socket) => {
   console.log(`${user.name} ${isReconnecting ? "reconnected to" : "joined"} room ${roomCode}`);
 });
 
+socket.on("leave-room", ({ roomCode }) => {
+  const room = rooms.get(roomCode);
+
+  if (!room) return;
+
+  const user = room.users.get(socket.id);
+
+  if (!user) return;
+
+  room.users.delete(socket.id);
+  room.typingUsers.delete(socket.id);
+
+  socket.leave(roomCode);
+
+  io.to(roomCode).emit("user-left", {
+    userCount: room.users.size,
+    users: Array.from(room.users.values()).map((u) => ({
+      id: u.id,
+      name: u.name,
+      status: u.status,
+    })),
+  });
+
+  console.log(`${user.name} left room ${roomCode}`);
+});
+
 socket.on("send-message", async ({ roomCode, message, userId, name , file}) => {
   const room = rooms.get(roomCode);
+  if (!room || !room.users.has(socket.id)) return;  
   if (!room) return;
 
   room.lastActive = Date.now();
@@ -288,37 +327,45 @@ socket.on("typing-stop", ({ roomCode }) => {
 
  socket.on("disconnect", () => {
   for (const [roomCode, room] of rooms) {
-    if (room.users.has(socket.id)) {
-      const user = room.users.get(socket.id);
-      const userId = user?.id;
+    const user = room.users.get(socket.id);
+    if (!user) continue;
 
-      room.users.delete(socket.id);
-      room.typingUsers.delete(socket.id);
+    const userId = user.id;
 
-      io.to(roomCode).emit("user-left", {
-        userCount: room.users.size,
-        users: Array.from(room.users.values()).map((u) => ({
-          id: u.id,
-          name: u.name,
-          status: u.status,
-        })),
-      });
+    room.typingUsers.delete(socket.id);
+    socket.to(roomCode).emit("typing-update", {
+      typingUsers: Array.from(room.typingUsers).map(
+        (id) => room.users.get(id)?.name || "Someone"
+      ),
+    });
 
-      if (user) {
-        setTimeout(() => {
-          const currentRoom = rooms.get(roomCode);
-          if (currentRoom) {
-            const hasReconnected = Array.from(currentRoom.users.values()).some(
-              (u) => u.id === userId
-            );
-            if (!hasReconnected) {
-              console.log(`${user.name} left room ${roomCode} (grace period expired)`);
-              // yahan chaho to "X left the room" system message bhi add kar sakte ho (Step 4B ke saveMessageToDb se)
-            }
-          }
-        }, GRACE_PERIOD_MS);
+    setTimeout(() => {
+      const currentRoom = rooms.get(roomCode);
+      if (!currentRoom) return;
+
+      
+      const stillHasOldSocket = currentRoom.users.get(socket.id) === user;
+      const hasReconnected = Array.from(currentRoom.users.values()).some(
+        (u) => u.id === userId
+      );
+
+      if (stillHasOldSocket && !hasReconnected) {
+        currentRoom.users.delete(socket.id);
+
+        io.to(roomCode).emit("user-left", {
+          userCount: currentRoom.users.size,
+          users: Array.from(currentRoom.users.values()).map((u) => ({
+            id: u.id,
+            name: u.name,
+            status: u.status,
+          })),
+        });
+
+        console.log(`${user.name} left room ${roomCode} (grace period expired)`);
+      } else {
+        console.log(`${user.name} reconnected to room ${roomCode}, skipping removal`);
       }
-    }
+    }, GRACE_PERIOD_MS);
   }
   console.log("User disconnected:", socket.id);
 });

@@ -10,17 +10,18 @@ interface FileUploadProps {
 export default function FileUpload({ onUploaded }: FileUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
+    setError("");
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_SOCKET_URL}/upload`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:4000"}/upload`, {
         method: "POST",
         body: formData,
       });
@@ -30,11 +31,13 @@ export default function FileUpload({ onUploaded }: FileUploadProps) {
       onUploaded(data);
     } catch (err) {
       console.error("File upload error:", err);
+      setError("File upload failed. Please try again.");
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
     }
   };
+  
 
   return (
     <>
@@ -44,7 +47,7 @@ export default function FileUpload({ onUploaded }: FileUploadProps) {
         className="hidden"
         onChange={handleFileSelect}
       />
-      <Button
+       <Button
         type="button"
         variant="outline"
         disabled={uploading}
@@ -52,6 +55,11 @@ export default function FileUpload({ onUploaded }: FileUploadProps) {
       >
         {uploading ? "..." : "📎"}
       </Button>
+      {error && (
+        <p className="text-sm text-red-500">
+          {error}
+        </p>
+      )}
     </>
   );
 }

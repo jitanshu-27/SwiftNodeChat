@@ -66,6 +66,10 @@ export function useSocket() {
   const joinRoom = useCallback((roomId: string, name: string, userId: string) => {
     socketRef.current.emit("join-room", { roomId, name, userId });
   }, []);
+  
+  const leaveRoom = useCallback((roomCode: string) => {
+  socketRef.current.emit("leave-room", { roomCode });
+}, []);
 
   const sendMessage = useCallback(( roomCode: string, message: string, userId: string, name: string, file?: { url: string; name: string; size: number; mimeType: string }) => {
     socketRef.current.emit("send-message", { roomCode, message, userId, name, file });
@@ -86,6 +90,7 @@ export function useSocket() {
     users,
     typingUsers,
     joinRoom,
+    leaveRoom,
     sendMessage,
     startTyping,
     stopTyping,

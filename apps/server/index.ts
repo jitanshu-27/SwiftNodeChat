@@ -109,7 +109,12 @@ async function getOrCreateRoom(roomCode: string) {
 const app = express();
 const httpServer = createServer(app);
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    "http://localhost:3000",
+    "https://swift-node-chat-client.vercel.app/",
+  ],
+}));
 app.use(express.json());
 
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -183,7 +188,12 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 });
 
 const io = new Server(httpServer, {
-  cors: { origin: "*" },
+  cors: {
+    origin: [
+      "http://localhost:3000",
+      "https://swift-node-chat-client.vercel.app/",
+    ],
+  },
 });
 
 

@@ -2,7 +2,7 @@
   "name": "swiftnodechat",
   "description": "A real-time chat application built with Socket.IO, Next.js and MongoDB",
   "private": true,
-  "packageManager": "npm@10.9.0",
+  "packageManager": "npm@11.6.2",
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build"
